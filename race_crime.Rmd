@@ -1,0 +1,156 @@
+---
+title: "race_crime"
+output: html_notebook
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r}
+library(tidyverse)
+library(readxl)
+library(janitor)
+obrab <- function(a) {
+  a %>% 
+    mutate(year = as_vector(.[1])[[2]]) %>%
+    mutate(year = ifelse(row_number() == 6, "year", parse_number(year))) %>% 
+    mutate(crime_age = as_vector(.[2])[[4]]) %>%
+    mutate(crime_age = ifelse(row_number() == 6, "crime_age", crime_age)) %>% 
+    
+    select(-(8:13)) %>% 
+    select(-(11:13)) %>% 
+    row_to_names(row_number = 6) %>% 
+    clean_names()
+
+  
+}
+dir("d:/mining/usacrime",pattern = "xls$", full.names = TRUE) %>%  map(read_xls) -> crimes
+crimes %>% map(obrab) %>% reduce(full_join) -> crimes
+police_shooting <- dir("d:/mining/usacrime",pattern = "csv$", full.names = TRUE) %>% read_csv()
+
+crimes %>% 
+  mutate(na = if_else(is.na(na), offense_charged, na)) %>% 
+  filter(!is.na(total)) %>% 
+  rename(crime = na) %>% 
+  select(-offense_charged) %>% 
+  mutate(across(everything(), ~if_else(.=="-", "0", .))) %>% 
+  mutate(across(!starts_with("cri"), parse_number)) -> crimes 
+  
+```
+
+```{r}
+crimes %>% 
+  count(crime_age, sort = TRUE)
+```
+
+```{r}
+police_shooting %>% 
+  filter(date < "2019-01-01") %>% 
+  mutate(year = lubridate::year(date)) %>%
+  filter(!is.na(race)) %>% 
+  count(year, race) %>% 
+  ggplot(aes(x = race, y = n))+
+  geom_col(aes(fill = year))
+```
+
+```{r}
+crimes %>% 
+  filter(str_detect(crime_age, "Total")) %>% 
+  filter(str_detect(crime, "TOTAL")) %>% 
+  group_by(year) %>% 
+  summarise(w = sum(white),
+            b = sum(black_or_african_american),
+            a = sum(asian),
+            o = sum(native_hawaiian_or_other_pacific_islander),
+            h = sum(hispanic_or_latino),
+            n = sum(american_indian_or_alaska_native)) %>% 
+  pivot_longer(-year, names_to = "race", values_to = "n") %>% 
+  mutate(race = str_to_upper(race))-> ob_crimes
+
+ob_crimes %>% 
+  ggplot(aes(x = race, y = n))+
+  geom_col(aes(fill = year))
+
+```
+
+```{r}
+police_shooting %>% 
+  filter(date < "2019-01-01") %>% 
+  mutate(year = lubridate::year(date)) %>%
+  filter(!is.na(race)) %>% 
+  count(year, race) %>%
+  left_join(ob_crimes %>% rename(m=n)) %>% 
+  mutate(pr = n/m*1000) %>% 
+  filter(race %in% c("W", "B", "A", "H")) %>% 
+  ggplot(aes(x= year, y = pr, color = race))+
+  geom_line(size = 2)
+
+```
+
+```{r}
+crimes %>% 
+  filter(str_detect(crime_age, "Total")) %>% 
+  filter(crime != "TOTAL") %>% 
+  # filter(year == 2016) %>% 
+  select(-total, -total2, -crime_age) %>%
+  pivot_longer(-c(crime,year), names_to = "race") %>% 
+  filter(race %in% c("white", "black_or_african_american")) %>% 
+  ggplot(aes(x= crime %>% fct_reorder(value), y = value))+
+  geom_col(aes(fill = race))+
+  # facet_wrap(vars(year))+
+  labs(x = "types of crime", y = "cases")+
+  coord_flip()
+  
+
+```
+
+```{r}
+crimes %>% 
+  # filter(year == 2015) %>% 
+  filter(str_detect(crime_age, "Total")) %>% 
+  mutate(proc = black_or_african_american/white*100) %>%
+  ggplot(aes(crime %>% fct_reorder(proc), proc ))+
+  facet_wrap(vars(year))+
+  geom_col()+
+  coord_flip()
+```
+
+
+```{r}
+crimes %>% 
+  mutate(w = white/total*100) %>% 
+  mutate(b = black_or_african_american/total*100) %>% 
+  mutate(h = hispanic_or_latino/total2*100) %>% 
+  mutate(a = asian/total*100) %>% 
+  select(matches("^cri"), year, w,b,h,a) %>%
+  filter(str_detect(crime_age, "Total")) %>% 
+  mutate(year = as.character(year)) %>% 
+  pivot_longer(c("w","b","h","a"), names_to = "race", values_to = "procent") %>% 
+  filter(race %in% c("w", "b", "a")) %>% 
+  ggplot(aes(x = crime %>% fct_reorder(-procent), y = procent, fill =  race))+
+  geom_col()+
+  facet_wrap(vars(year))+
+  coord_flip()
+  
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
