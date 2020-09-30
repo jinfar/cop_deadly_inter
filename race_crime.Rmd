@@ -23,9 +23,9 @@ obrab <- function(a) {
 
   
 }
-dir("d:/mining/usacrime",pattern = "xls$", full.names = TRUE) %>%  map(read_xls) -> crimes
+dir("/data/",pattern = "xls$", full.names = TRUE) %>%  map(read_xls) -> crimes
 crimes %>% map(obrab) %>% reduce(full_join) -> crimes
-police_shooting <- dir("d:/mining/usacrime",pattern = "csv$", full.names = TRUE) %>% read_csv()
+police_shooting <- dir("/data/",pattern = "csv$", full.names = TRUE) %>% read_csv()
 
 crimes %>% 
   mutate(na = if_else(is.na(na), offense_charged, na)) %>% 
